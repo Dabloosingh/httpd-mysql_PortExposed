@@ -1,0 +1,154 @@
+Step-1
+Create a namespace:-
+kubectl create namespace <namespace-name>
+Verify the namespace:-
+kubectl get namespaces
+View resources in a specific namespace:-
+kubectl get all -n <namespace-name>
+Set the default namespace for the current context:
+kubectl config set-context --current --namespace=<namespace-name>
+
+Verify the default namespace:
+kubectl config view --minify | grep namespace:
+Step 2: Deploy the MySQL Backend
+1.	Create a MySQL Deployment YAML file (mysql-deployment.yaml):
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: grras-project
+spec:
+  selector:
+    matchLabels:
+      app: mysql
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - image: mysql:5.7
+        name: mysql
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: rootpassword
+        - name: MYSQL_DATABASE
+          value: mydatabase
+        ports:
+        - containerPort: 3306
+          name: mysql
+
+Create a MySQL Service YAML file (vim mysql-service.yaml):
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: grras-project
+spec:
+  ports:
+  - port: 3306
+  selector:
+    app: mysql
+  clusterIP: None
+Apply the MySQL Deployment and Service:
+kubectl apply -f mysql-deployment.yaml
+kubectl apply -f mysql-service.yaml
+
+Step 3: Deploy the httpd Frontend
+1.	Create an httpd Deployment YAML file (vim httpd-deployment.yaml):
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpd
+  namespace: grras-project
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: httpd
+  template:
+    metadata:
+      labels:
+        app: httpd
+    spec:
+      containers:
+      - name: httpd
+        image: httpd:2.4
+        ports:
+        - containerPort: 80
+
+Create an httpd Service YAML file (httpd-service.yaml):
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpd
+  namespace: grras-project
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: httpd
+Apply the httpd Deployment and Service:
+kubectl apply -f httpd-deployment.yaml
+kubectl apply -f httpd-service.yaml
+
+Step 4: Configure Frontend to Connect to Backend
+1.	Modify the httpd Deployment to include environment variables and a simple HTML file that connects to MySQL.
+Here’s an updated version of httpd-deployment.yaml that includes a simple script to connect to MySQL:
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpd
+  namespace: grras-project
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: httpd
+  template:
+    metadata:
+      labels:
+        app: httpd
+    spec:
+      containers:
+      - name: httpd
+        image: httpd:2.4
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: html
+          mountPath: /usr/local/apache2/htdocs/
+      volumes:
+      - name: html
+        configMap:
+          name: html-configmap
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: html-configmap
+  namespace: grras-project
+data:
+  index.html: |
+    <html>
+    <head>
+      <title>Frontend</title>
+    </head>
+    <body>
+      <h1>Frontend Application</h1>
+      <p>Attempting to connect to MySQL backend...</p>
+    </body>
+    </html>
+:wq!
+
+Apply the updated httpd Deployment and ConfigMap:
+kubectl apply -f httpd-deployment.yaml
+
+For Expose deployment out of cluster
+kubectl expose deplyment httpd --port 80 --type NodePort
+kubectl get svc
